@@ -1,0 +1,23 @@
+[module]
+name = "programs"
+version = "0.1.0"
+language = "native"
+entry = "programs"
+abi = "native"
+description = "Lists programs installed on THIS machine — Windows uninstall registry, Linux packages (dpkg/rpm/flatpak/snap), XDG desktop entries, and user-local installs (~/.local, /opt)."
+authors = ["Limen"]
+repo = "CRC-BARRACUDA/limen-programs"
+
+[provides]
+capabilities = ["programs.local"]
+
+# Optional: if a report provider is installed, a "Make Report" action appears.
+[optional.capabilities]
+"report.build" = ">=0.1"
+
+# Linux: spawns dpkg-query / rpm / flatpak / snap to enumerate packages.
+[permissions]
+subprocess = true
+# A few per-machine install locations can need admin to read on some hosts.
+# Informational heads-up only — nothing is gated.
+may_require_admin = true
