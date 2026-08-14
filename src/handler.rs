@@ -3,6 +3,7 @@
 //! A row action (open, reveal, copy) answers with the screen it was invoked
 //! from, carrying a notice: the host only reads a notice off a view, and the
 //! user should stay exactly where they were while being told what happened.
+//! Which screen that is rides along in the call — see [`Screen`].
 
 use crate::*;
 
@@ -57,8 +58,11 @@ impl Handler for Programs {
             // Turn to a page (from a pager button) without re-enumerating.
             "page" => Ok(self.page(lang, &params, report)),
             "list" => Ok(list_programs()),
-            // Row actions: open an entry's details, or open where it's installed.
-            "about" => Ok(self.about(lang, &params)),
+            // Row actions: open an entry's details — as a pop-up over the
+            // table (double-click, or About) or in a tab of its own — and open
+            // where it's installed.
+            "about" => Ok(self.about(lang, &params, Screen::Modal)),
+            "about_tab" => Ok(self.about(lang, &params, Screen::Tab)),
             "open_location" => Ok(self.open_location(lang, &params, host, report)),
             "reveal" => Ok(self.reveal(lang, &params, host, report)),
             "copy_path" => Ok(self.copy_path(lang, &params, host, report)),
@@ -175,13 +179,13 @@ impl Programs {
         )
     }
 
-    /// A detail view for one entry (opened in a new tab from a row action).
-    pub(crate) fn about(&mut self, lang: &str, params: &Value) -> Value {
+    /// One entry in full, on the screen the user asked for it on.
+    pub(crate) fn about(&mut self, lang: &str, params: &Value, where_: Screen) -> Value {
         let id = params.get("id").and_then(Value::as_str).unwrap_or("");
         match self.last.get(id) {
-            Some(d) => about_view(lang, d, id),
+            Some(d) => about_view(lang, d, id, where_),
             None => notice(
-                stale_view(lang),
+                stale_view(lang, where_),
                 "error",
                 catalog().tr(lang, "notice.stale"),
             ),
@@ -189,7 +193,7 @@ impl Programs {
     }
 
     /// Open where a program is installed: the folder or file in the file manager.
-    /// `params`: `{ id, in_tab? }`.
+    /// `params`: `{ id, from? }`.
     fn open_location(&mut self, lang: &str, params: &Value, host: &Host, report: bool) -> Value {
         let id = params.get("id").and_then(Value::as_str).unwrap_or("");
         let opened = self
@@ -241,7 +245,7 @@ impl Programs {
     ///
     /// A notice only reaches the user on a view, and these actions have no screen
     /// of their own — so the one the user is looking at is redrawn underneath it.
-    /// `in_tab` says that was the detail tab rather than the table.
+    /// `from` says which one that is.
     pub(crate) fn acted(
         &mut self,
         lang: &str,
@@ -252,16 +256,16 @@ impl Programs {
         err_key: &str,
     ) -> Value {
         let id = params.get("id").and_then(Value::as_str).unwrap_or("");
-        let in_tab = params.get("in_tab").and_then(Value::as_bool).unwrap_or(false);
-        let view = if in_tab {
-            match self.last.get(id) {
-                Some(d) => about_view(lang, d, id),
-                None => stale_view(lang),
+        let view = match Screen::of(params) {
+            Screen::Table => {
+                let entries = self.last_entries.clone();
+                let query = self.last_query.clone();
+                self.render(lang, &entries, &query, self.last_page, report)
             }
-        } else {
-            let entries = self.last_entries.clone();
-            let query = self.last_query.clone();
-            self.render(lang, &entries, &query, self.last_page, report)
+            where_ => match self.last.get(id) {
+                Some(d) => about_view(lang, d, id, where_),
+                None => stale_view(lang, where_),
+            },
         };
         match (ok, ok_key.is_empty()) {
             (true, true) => view, // it worked, and the result is its own answer

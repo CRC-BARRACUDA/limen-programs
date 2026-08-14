@@ -6,6 +6,7 @@
 use crate::*;
 
 mod alerts;
+mod details;
 mod i18n;
 mod pagination;
 

@@ -44,28 +44,32 @@ fn what_succeeds_visibly_stays_quiet() {
 #[test]
 fn an_entry_that_is_gone_says_so() {
     let mut p = Programs::default();
-    let v = p.about("en", &json!({ "id": "4242" }));
+    let v = p.about("en", &json!({ "id": "4242" }), Screen::Modal);
     let (level, text) = notice_of(&v).expect("a stale row is worth saying");
     assert_eq!(level, "error");
     assert!(!text.contains("notice."), "the key leaked: {text}");
 }
 
-/// An action taken from the detail tab comes back to the detail tab.
+/// An action taken from the entry's own screen comes back to that screen — the
+/// tab stays a tab, and the pop-up stays open over the table it was opened from.
 #[test]
-fn an_action_in_a_tab_keeps_the_tab() {
-    let mut p = Programs::default();
-    let v = p.acted(
-        "en",
-        &json!({ "id": "4242", "in_tab": true }),
-        false,
-        true,
-        "notice.copied",
-        "notice.no_clipboard",
-    );
-    // No table: this is the entry's own screen, not the results.
-    assert!(!widgets(&v)
-        .iter()
-        .any(|w| w.get("kind").and_then(Value::as_str) == Some("table")));
+fn an_action_answers_on_the_screen_it_was_taken_from() {
+    for (from, is_modal) in [("tab", false), ("modal", true)] {
+        let mut p = Programs::default();
+        let v = p.acted(
+            "en",
+            &json!({ "id": "4242", "from": from }),
+            false,
+            true,
+            "notice.copied",
+            "notice.no_clipboard",
+        );
+        // No table: this is the entry's own screen, not the results.
+        assert!(!widgets(&v)
+            .iter()
+            .any(|w| w.get("kind").and_then(Value::as_str) == Some("table")));
+        assert_eq!(v.get("modal").is_some(), is_modal, "from {from}: {v}");
+    }
 }
 
 /// The count a scan reports is filled in, in whichever language asked.

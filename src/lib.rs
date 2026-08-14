@@ -53,7 +53,7 @@ pub(crate) use std::collections::HashMap;
 pub(crate) use std::path::Path;
 
 pub(crate) use limen_sdk_rust::ui::{
-    button, label, menu_item, notice, row, select, separator, table, text, window, MenuItem, Widget,
+    button, label, menu_item, notice, row, select, separator, table, text, window, window_modal_sized, MenuItem, Widget,
 };
 pub(crate) use limen_sdk_rust::{json, rpc, Catalog, Handler, Host, RpcError, Value};
 

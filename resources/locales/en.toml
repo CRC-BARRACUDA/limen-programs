@@ -39,6 +39,7 @@ next = "Next ›"
 
 [menu]
 about = "About"
+about_tab = "Open in a new tab"
 open_location = "Open location"
 open_file = "Open file"
 reveal = "Show in Explorer"
@@ -46,6 +47,7 @@ copy_path = "Copy path"
 
 [about]
 title = "Program"
+close = "Close"
 stale = "This entry isn't in the latest scan — re-scan and try again."
 unknown = "—"
 
