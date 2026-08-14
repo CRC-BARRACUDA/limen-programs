@@ -1,4 +1,8 @@
 //! The module itself — what it holds between calls, and what each call does.
+//!
+//! A row action (open, reveal, copy) answers with the screen it was invoked
+//! from, carrying a notice: the host only reads a notice off a view, and the
+//! user should stay exactly where they were while being told what happened.
 
 use crate::*;
 
@@ -55,9 +59,9 @@ impl Handler for Programs {
             "list" => Ok(list_programs()),
             // Row actions: open an entry's details, or open where it's installed.
             "about" => Ok(self.about(lang, &params)),
-            "open_location" => Ok(self.open_location(&params, host)),
-            "reveal" => Ok(self.reveal(&params, host)),
-            "copy_path" => Ok(self.copy_path(&params, host)),
+            "open_location" => Ok(self.open_location(lang, &params, host, report)),
+            "reveal" => Ok(self.reveal(lang, &params, host, report)),
+            "copy_path" => Ok(self.copy_path(lang, &params, host, report)),
             // Report integration (present only while a report provider is loaded).
             "report_config" => Ok(report_config(lang)),
             "make_report" => Ok(self.make_report(lang, &params, host)),
@@ -88,7 +92,19 @@ impl Programs {
         self.last_entries = entries.clone();
         self.last_query = query.clone();
         // A fresh scan / search resets to the first page.
-        self.render(lang, &entries, &query, 0, report)
+        let view = self.render(lang, &entries, &query, 0, report);
+        // What a scan found, said in the corner: the count is on screen too, but
+        // a scan is an event and the user may have looked away while it ran.
+        let t = |k: &str| catalog().tr(lang, k);
+        if entries.is_empty() {
+            notice(view, "info", t("notice.none"))
+        } else {
+            notice(
+                view,
+                "ok",
+                t("notice.scanned").replace("{total}", &entries.len().to_string()),
+            )
+        }
     }
 
     /// Turn to another page of the current (already-scanned) results. Re-slices
@@ -126,7 +142,11 @@ impl Programs {
         let filtered: Vec<(usize, &Value)> =
             entries.iter().enumerate().filter(|(_, d)| matches(d)).collect();
         let total = filtered.len();
-        let page_count = if total == 0 { 1 } else { total.div_ceil(PAGE_SIZE) };
+        let page_count = if total == 0 {
+            1
+        } else {
+            total.div_ceil(PAGE_SIZE)
+        };
         let page = page.min(page_count - 1);
         self.last_page = page;
         let start = page * PAGE_SIZE;
@@ -156,48 +176,98 @@ impl Programs {
     }
 
     /// A detail view for one entry (opened in a new tab from a row action).
-    fn about(&self, lang: &str, params: &Value) -> Value {
+    pub(crate) fn about(&mut self, lang: &str, params: &Value) -> Value {
         let id = params.get("id").and_then(Value::as_str).unwrap_or("");
         match self.last.get(id) {
             Some(d) => about_view(lang, d, id),
-            None => stale_view(lang),
+            None => notice(
+                stale_view(lang),
+                "error",
+                catalog().tr(lang, "notice.stale"),
+            ),
         }
     }
 
     /// Open where a program is installed: the folder or file in the file manager.
-    /// `params`: `{ id }`.
-    fn open_location(&self, params: &Value, host: &Host) -> Value {
+    /// `params`: `{ id, in_tab? }`.
+    fn open_location(&mut self, lang: &str, params: &Value, host: &Host, report: bool) -> Value {
         let id = params.get("id").and_then(Value::as_str).unwrap_or("");
-        if let Some(d) = self.last.get(id) {
-            if let Some((_, target, value)) = open_kind(d) {
-                host.open(target, &value);
-            }
-        }
-        Value::Null
+        let opened = self
+            .last
+            .get(id)
+            .and_then(open_kind)
+            .map(|(_, target, value)| host.open(target, &value))
+            .is_some();
+        // Opening a file manager is its own feedback; only the case where there
+        // was nothing to open needs saying.
+        self.acted(lang, params, report, opened, "", "notice.nothing_to_open")
     }
 
     /// Reveal the entry's location in the OS file manager (Explorer / Finder /
-    /// Files) with the item selected. `params`: `{ id }`.
-    fn reveal(&self, params: &Value, host: &Host) -> Value {
+    /// Files) with the item selected. `params`: `{ id, in_tab? }`.
+    fn reveal(&mut self, lang: &str, params: &Value, host: &Host, report: bool) -> Value {
         let id = params.get("id").and_then(Value::as_str).unwrap_or("");
-        if let Some(path) = self.last.get(id).and_then(resolved_path) {
-            host.open("reveal", &path);
+        let found = self.last.get(id).and_then(resolved_path);
+        if let Some(path) = &found {
+            host.open("reveal", path);
         }
-        Value::Null
+        self.acted(
+            lang,
+            params,
+            report,
+            found.is_some(),
+            "",
+            "notice.nothing_to_open",
+        )
     }
 
     /// Copy the entry's path (install location / entry file, or a resolved
-    /// package file) to the system clipboard. `params`: `{ id }`.
-    fn copy_path(&self, params: &Value, host: &Host) -> Value {
+    /// package file) to the system clipboard. `params`: `{ id, in_tab? }`.
+    fn copy_path(&mut self, lang: &str, params: &Value, host: &Host, report: bool) -> Value {
         let id = params.get("id").and_then(Value::as_str).unwrap_or("");
-        if let Some(path) = self.last.get(id).and_then(resolved_path) {
-            if copy_to_clipboard(&path) {
-                host.log(&format!("programs: copied path to clipboard: {path}"));
-            } else {
-                host.log("programs: couldn't copy path — no clipboard tool found");
-            }
+        let path = self.last.get(id).and_then(resolved_path);
+        let copied = match &path {
+            Some(p) => copy_to_clipboard(p),
+            None => false,
+        };
+        if let Some(p) = &path {
+            host.log(&format!("programs: copied path to clipboard: {p}"));
         }
-        Value::Null
+        self.acted(lang, params, report, copied, "notice.copied", "notice.no_clipboard")
+    }
+
+    /// Answer a row action: the screen it was invoked from, carrying what
+    /// happened.
+    ///
+    /// A notice only reaches the user on a view, and these actions have no screen
+    /// of their own — so the one the user is looking at is redrawn underneath it.
+    /// `in_tab` says that was the detail tab rather than the table.
+    pub(crate) fn acted(
+        &mut self,
+        lang: &str,
+        params: &Value,
+        report: bool,
+        ok: bool,
+        ok_key: &str,
+        err_key: &str,
+    ) -> Value {
+        let id = params.get("id").and_then(Value::as_str).unwrap_or("");
+        let in_tab = params.get("in_tab").and_then(Value::as_bool).unwrap_or(false);
+        let view = if in_tab {
+            match self.last.get(id) {
+                Some(d) => about_view(lang, d, id),
+                None => stale_view(lang),
+            }
+        } else {
+            let entries = self.last_entries.clone();
+            let query = self.last_query.clone();
+            self.render(lang, &entries, &query, self.last_page, report)
+        };
+        match (ok, ok_key.is_empty()) {
+            (true, true) => view, // it worked, and the result is its own answer
+            (true, false) => notice(view, "ok", catalog().tr(lang, ok_key)),
+            (false, _) => notice(view, "error", catalog().tr(lang, err_key)),
+        }
     }
 
     /// Build a report spec from the last scan and hand it to a report provider.
@@ -210,8 +280,16 @@ impl Programs {
         match host.call("report.build", "build", spec) {
             // The provider answered with a view of its own — it is the report.
             Ok(v) if v.get("widgets").is_some() => v,
-            Ok(_) => exported_view(lang),
-            Err(e) => report_failed_view(lang, format!("{e}")),
+            Ok(_) => notice(
+                exported_view(lang),
+                "ok",
+                catalog().tr(lang, "notice.report_done"),
+            ),
+            Err(e) => notice(
+                report_failed_view(lang, format!("{e}")),
+                "error",
+                catalog().tr(lang, "notice.report_failed"),
+            ),
         }
     }
 }

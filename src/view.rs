@@ -161,12 +161,15 @@ pub(crate) fn page_buttons(lang: &str, page: usize, page_count: usize) -> Vec<Wi
 }
 
 /// A detail view for one entry (opened in a new tab from a row action).
+///
+/// Its actions carry `in_tab`, so when one of them answers with a notice it
+/// comes back to *this* screen rather than replacing the tab with the table.
 pub(crate) fn about_view(lang: &str, d: &Value, id: &str) -> Value {
     let t = |k: &str| catalog().tr(lang, k);
     let shown = |v: String| if v.is_empty() { t("about.unknown") } else { v };
     let field = |name: String, val: String| row(vec![label(name).strong(), label(shown(val))]);
     let title = cell(d, "name");
-    let args = json!({ "id": id });
+    let args = json!({ "id": id, "in_tab": true });
 
     let mut widgets = vec![
         label(title.clone()).strong(),

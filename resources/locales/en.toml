@@ -88,3 +88,14 @@ system = "System-wide: {system}"
 user = "User: {user}"
 chart_by_source = "Programs by source"
 section = "Installed programs"
+
+# Passing notices, said in the corner.
+[notice]
+scanned = "Found {total} programs."
+none = "No installed programs were found."
+copied = "Path copied to the clipboard."
+no_clipboard = "Nothing was copied: no clipboard tool is available."
+nothing_to_open = "This entry records no location that can be opened."
+stale = "This entry isn't in the latest scan."
+report_done = "Report exported."
+report_failed = "The report could not be built."

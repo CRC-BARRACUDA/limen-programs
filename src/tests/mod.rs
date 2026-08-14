@@ -5,6 +5,7 @@
 
 use crate::*;
 
+mod alerts;
 mod i18n;
 mod pagination;
 
@@ -53,6 +54,15 @@ fn pager_texts(v: &Value) -> Vec<String> {
         .iter()
         .filter_map(|c| c.get("text").and_then(Value::as_str).map(str::to_string))
         .collect()
+}
+
+/// The notice a view carries, if any: `(level, text)`.
+fn notice_of(v: &Value) -> Option<(String, String)> {
+    let n = v.get("notice")?;
+    Some((
+        n.get("level")?.as_str()?.to_string(),
+        n.get("text")?.as_str()?.to_string(),
+    ))
 }
 
 /// Every `a.b` key in a catalog file, in the flattened form the SDK looks up.
