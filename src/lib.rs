@@ -55,7 +55,7 @@ pub(crate) use std::path::Path;
 pub(crate) use limen_sdk_rust::ui::{
     button, label, menu_item, row, select, separator, table, text, window, MenuItem, Widget,
 };
-pub(crate) use limen_sdk_rust::{json, rpc, Handler, Host, RpcError, Value};
+pub(crate) use limen_sdk_rust::{json, rpc, Catalog, Handler, Host, RpcError, Value};
 
 use limen_sdk_rust::export_module;
 
@@ -86,6 +86,19 @@ pub(crate) fn list_programs() -> Value {
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]
 pub(crate) fn package_path(_source: &str, _name: &str) -> Option<String> {
     None
+}
+
+/// This module's own translations (its `resources/locales/*.toml`, embedded).
+/// English is the default/fallback; `host.locale()` selects the active one at
+/// render time.
+pub(crate) fn catalog() -> &'static Catalog {
+    static C: std::sync::OnceLock<Catalog> = std::sync::OnceLock::new();
+    C.get_or_init(|| {
+        Catalog::new(&[
+            ("en", include_str!("../resources/locales/en.toml")),
+            ("uk", include_str!("../resources/locales/uk.toml")),
+        ])
+    })
 }
 
 export_module!(Programs);

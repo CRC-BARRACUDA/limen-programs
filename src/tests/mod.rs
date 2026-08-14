@@ -5,6 +5,7 @@
 
 use crate::*;
 
+mod i18n;
 mod pagination;
 
 #[cfg(target_os = "linux")]
@@ -52,4 +53,22 @@ fn pager_texts(v: &Value) -> Vec<String> {
         .iter()
         .filter_map(|c| c.get("text").and_then(Value::as_str).map(str::to_string))
         .collect()
+}
+
+/// Every `a.b` key in a catalog file, in the flattened form the SDK looks up.
+fn catalog_keys(toml: &str) -> Vec<String> {
+    let mut section = String::new();
+    let mut out = Vec::new();
+    for line in toml.lines() {
+        let line = line.trim();
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+            section = format!("{name}.");
+        } else if let Some((k, _)) = line.split_once('=') {
+            out.push(format!("{section}{}", k.trim()));
+        }
+    }
+    out
 }

@@ -1,0 +1,90 @@
+# English strings for the programs module.
+# `[module] title`/`description` are what the manager shows on the module card
+# for the active language; the rest are the module's own UI strings, looked up at
+# render time via `host.locale()` + the SDK `Catalog`.
+
+# The module's view/window title, kept identical to `[module] title` so the panel
+# header matches the tab and the card.
+title = "List of installed programs"
+
+[module]
+title = "List of installed programs"
+description = "Lists programs installed on THIS machine — Windows uninstall registry, Linux packages (dpkg/rpm/flatpak/snap), XDG desktop entries, and user-local installs (~/.local, /opt)."
+
+[idle]
+hint = "Scan this machine for installed programs."
+scan = "Scan"
+
+# The table's six columns. Values are data, not strings — a source is called
+# "dpkg" in every language — so only the headings are translated.
+[table]
+name = "Name"
+version = "Version"
+publisher = "Publisher"
+source = "Source"
+scope = "Scope"
+location = "Location"
+
+[view]
+search = "Search"
+search_hint = "name, version, publisher, source, location…"
+refresh = "Refresh"
+make_report = "Make Report"
+row_hint = "Right-click a row for actions; double-click to open its details."
+heading = "Installed programs ({total}) — {shown}"
+no_matches = "no matches"
+shown = "showing {from}–{to} of {total} · page {page}/{pages}"
+prev = "‹ Prev"
+next = "Next ›"
+
+[menu]
+about = "About"
+open_location = "Open location"
+open_file = "Open file"
+reveal = "Show in Explorer"
+copy_path = "Copy path"
+
+[about]
+title = "Program"
+stale = "This entry isn't in the latest scan — re-scan and try again."
+unknown = "—"
+
+[report]
+title = "Make Report"
+options = "Report options"
+output = "Output"
+include = "Include"
+show = "Show"
+generate = "Generate"
+result_title = "Report"
+exported = "Report exported"
+exported_note = "The document was generated and opened in your default app."
+failed = "Couldn't build the report"
+
+# The choices in the report form. The form sends the label it showed, so these
+# are matched back against this same list — see `choice` in report.rs.
+[report.format]
+view = "In-app view"
+markdown = "Markdown"
+html = "HTML"
+csv = "CSV"
+
+[report.content]
+all = "Tables and charts"
+tables = "Tables only"
+charts = "Charts only"
+
+[report.scope]
+all = "All programs"
+system = "System only"
+user = "User only"
+
+# What the generated document itself says.
+[report.doc]
+title = "Installed Programs Report"
+subtitle = "{total} programs · {system} system · {user} user"
+total = "Total programs: {total}"
+system = "System-wide: {system}"
+user = "User: {user}"
+chart_by_source = "Programs by source"
+section = "Installed programs"

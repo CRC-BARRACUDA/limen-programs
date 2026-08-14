@@ -1,5 +1,9 @@
 //! One installed program, in the shared schema every collector emits — and what
 //! can be done with one.
+//!
+//! The fields are data, not prose: a source is called `dpkg` and a scope
+//! `system` in every language, so nothing here is translated. Only the words
+//! *about* an entry (its column headings, its menu items) are — see [`view`].
 
 use crate::*;
 
@@ -48,9 +52,9 @@ pub(crate) fn row_cells(d: &Value) -> Vec<String> {
 }
 
 /// How to open an entry, decided from its actual `location`:
-/// `(menu/button label, host.open target, value)`. `None` when there's nothing
-/// to open — some programs record no install path, and package names aren't
-/// filesystem paths, so those rows simply get no open action.
+/// `(label key, host.open target, value)`. `None` when there's nothing to open —
+/// some programs record no install path, and package names aren't filesystem
+/// paths, so those rows simply get no open action.
 pub(crate) fn open_kind(d: &Value) -> Option<(&'static str, &'static str, String)> {
     let location = cell(d, "location");
     if location.is_empty() {
@@ -58,9 +62,9 @@ pub(crate) fn open_kind(d: &Value) -> Option<(&'static str, &'static str, String
     }
     let p = Path::new(&location);
     if p.is_dir() {
-        Some(("Open location", "path", location)) // an install folder → file manager
+        Some(("menu.open_location", "path", location)) // an install folder → file manager
     } else if p.is_file() {
-        Some(("Open file", "path", location)) // an executable / .desktop entry
+        Some(("menu.open_file", "path", location)) // an executable / .desktop entry
     } else {
         None // a path that doesn't exist, or a bare package name
     }

@@ -1,43 +1,51 @@
 //! Everything the module draws.
 //!
-//! Nothing here holds state: the handler decides *what* to show, these decide
-//! how it looks.
+//! Every screen takes `lang` and resolves its words through the catalog, so the
+//! same call renders in whatever language the host is set to. Nothing here holds
+//! state: the handler decides *what* to show, these decide how it looks.
 
 use crate::*;
 
 /// The landing view: nothing is scanned until the user asks. Just a hint and a
 /// Scan button that invokes `scan`.
-pub(crate) fn idle_view() -> Value {
+pub(crate) fn idle_view(lang: &str) -> Value {
+    let t = |k: &str| catalog().tr(lang, k);
     window(
-        "Programs",
+        t("title"),
         vec![
-            label("Scan this machine for installed programs.").weak(),
-            button("Scan", "programs.local", "scan").primary(),
+            label(t("idle.hint")).weak(),
+            button(t("idle.scan"), "programs.local", "scan").primary(),
         ],
     )
 }
 
 /// The table's column headings, in order.
-pub(crate) fn columns() -> Vec<String> {
-    ["Name", "Version", "Publisher", "Source", "Scope", "Location"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect()
+pub(crate) fn columns(lang: &str) -> Vec<String> {
+    let t = |k: &str| catalog().tr(lang, k);
+    vec![
+        t("table.name"),
+        t("table.version"),
+        t("table.publisher"),
+        t("table.source"),
+        t("table.scope"),
+        t("table.location"),
+    ]
 }
 
 /// The right-click menu for one entry: About; an open action when the location
 /// is an actual file/folder on disk; and — whenever a path is available (a
 /// recorded location or a resolvable package) — "Show in Explorer" and
 /// "Copy path".
-pub(crate) fn row_menu_for(d: &Value) -> Vec<MenuItem> {
-    let mut items = vec![menu_item("About", "programs.local", "about").open_in_tab()];
-    if let Some((label, _, _)) = open_kind(d) {
-        items.push(menu_item(label, "programs.local", "open_location"));
+pub(crate) fn row_menu_for(lang: &str, d: &Value) -> Vec<MenuItem> {
+    let t = |k: &str| catalog().tr(lang, k);
+    let mut items = vec![menu_item(t("menu.about"), "programs.local", "about").open_in_tab()];
+    if let Some((key, _, _)) = open_kind(d) {
+        items.push(menu_item(t(key), "programs.local", "open_location"));
     }
     if has_path(d) {
         // Reveal it in the OS file manager (Explorer / Finder / Files), item selected.
-        items.push(menu_item("Show in Explorer", "programs.local", "reveal"));
-        items.push(menu_item("Copy path", "programs.local", "copy_path"));
+        items.push(menu_item(t("menu.reveal"), "programs.local", "reveal"));
+        items.push(menu_item(t("menu.copy_path"), "programs.local", "copy_path"));
     }
     items
 }
@@ -46,7 +54,9 @@ pub(crate) fn row_menu_for(d: &Value) -> Vec<MenuItem> {
 ///
 /// The rows are already filtered, sliced and cached by the caller — this only
 /// puts them on screen, so paging and searching cost no re-enumeration.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn results_view(
+    lang: &str,
     query_raw: &str,
     rows: Vec<Vec<String>>,
     ids: Vec<String>,
@@ -55,36 +65,48 @@ pub(crate) fn results_view(
     (page, page_count): (usize, usize),
     report: bool,
 ) -> Value {
-    let mut actions = vec![button("Refresh", "programs.local", "scan").primary()];
+    let t = |k: &str| catalog().tr(lang, k);
+
+    let mut actions = vec![button(t("view.refresh"), "programs.local", "scan").primary()];
     if report {
-        actions.push(button("Make Report", "programs.local", "report_config").open_in_tab());
+        actions.push(
+            button(t("view.make_report"), "programs.local", "report_config").open_in_tab(),
+        );
     }
 
     let shown = if total == 0 {
-        "no matches".to_string()
+        t("view.no_matches")
     } else {
-        format!("showing {}–{} of {} · page {}/{}", start + 1, end, total, page + 1, page_count)
+        t("view.shown")
+            .replace("{from}", &(start + 1).to_string())
+            .replace("{to}", &end.to_string())
+            .replace("{total}", &total.to_string())
+            .replace("{page}", &(page + 1).to_string())
+            .replace("{pages}", &page_count.to_string())
     };
+    let heading = t("view.heading")
+        .replace("{total}", &total.to_string())
+        .replace("{shown}", &shown);
 
     let mut widgets = vec![
         text("query")
-            .label("Search")
-            .placeholder("name, version, publisher, source, location…")
+            .label(t("view.search"))
+            .placeholder(t("view.search_hint"))
             .default(query_raw.to_string()),
         row(actions),
-        label("Right-click a row for actions; double-click to open its details.").weak(),
+        label(t("view.row_hint")).weak(),
         separator(),
-        label(format!("Installed programs ({total}) — {shown}")).strong(),
-        table(columns(), rows)
+        label(heading).strong(),
+        table(columns(lang), rows)
             .row_ids(ids)
             .row_menus(menus)
             .on_activate("programs.local", "about"),
     ];
     // Pager at the bottom: page buttons when there's more than one page.
     if page_count > 1 {
-        widgets.push(row(page_buttons(page, page_count)));
+        widgets.push(row(page_buttons(lang, page, page_count)));
     }
-    window("Programs", widgets)
+    window(t("title"), widgets)
 }
 
 /// The bottom pager: `‹ Prev`, page numbers, and `Next ›`. A run of [`PAGER_WIN`]
@@ -97,8 +119,9 @@ pub(crate) fn results_view(
 ///
 /// Each number calls `page` with its target; the search box value rides along, so
 /// paging stays within the current filter. The current page is highlighted.
-pub(crate) fn page_buttons(page: usize, page_count: usize) -> Vec<Widget> {
+pub(crate) fn page_buttons(lang: &str, page: usize, page_count: usize) -> Vec<Widget> {
     const PAGER_WIN: usize = 5;
+    let t = |k: &str| catalog().tr(lang, k);
     let last = page_count - 1;
     let btn =
         |p: usize, text: String| button(text, "programs.local", "page").args(json!({ "page": p }));
@@ -118,7 +141,7 @@ pub(crate) fn page_buttons(page: usize, page_count: usize) -> Vec<Widget> {
 
     let mut out: Vec<Widget> = Vec::new();
     if page > 0 {
-        out.push(btn(page - 1, "‹ Prev".into()));
+        out.push(btn(page - 1, t("view.prev")));
     }
     let mut prev: Option<usize> = None;
     for p in shown {
@@ -132,40 +155,44 @@ pub(crate) fn page_buttons(page: usize, page_count: usize) -> Vec<Widget> {
         prev = Some(p);
     }
     if page + 1 < page_count {
-        out.push(btn(page + 1, "Next ›".into()));
+        out.push(btn(page + 1, t("view.next")));
     }
     out
 }
 
 /// A detail view for one entry (opened in a new tab from a row action).
-pub(crate) fn about_view(d: &Value, id: &str) -> Value {
-    let shown = |v: String| if v.is_empty() { "—".to_string() } else { v };
-    let field = |name: &str, val: String| row(vec![label(name.to_string()).strong(), label(shown(val))]);
+pub(crate) fn about_view(lang: &str, d: &Value, id: &str) -> Value {
+    let t = |k: &str| catalog().tr(lang, k);
+    let shown = |v: String| if v.is_empty() { t("about.unknown") } else { v };
+    let field = |name: String, val: String| row(vec![label(name).strong(), label(shown(val))]);
     let title = cell(d, "name");
+    let args = json!({ "id": id });
 
     let mut widgets = vec![
         label(title.clone()).strong(),
         separator(),
-        field("Name", cell(d, "name")),
-        field("Version", cell(d, "version")),
-        field("Publisher", cell(d, "publisher")),
-        field("Source", cell(d, "source")),
-        field("Scope", cell(d, "scope")),
-        field("Location", cell(d, "location")),
+        field(t("table.name"), cell(d, "name")),
+        field(t("table.version"), cell(d, "version")),
+        field(t("table.publisher"), cell(d, "publisher")),
+        field(t("table.source"), cell(d, "source")),
+        field(t("table.scope"), cell(d, "scope")),
+        field(t("table.location"), cell(d, "location")),
     ];
     // Actions: open where it's installed (when that resolves on disk) and
     // copy the path (whenever one is recorded).
     let mut actions = Vec::new();
-    if let Some((label, _, _)) = open_kind(d) {
+    if let Some((key, _, _)) = open_kind(d) {
         actions.push(
-            button(label, "programs.local", "open_location")
-                .args(json!({ "id": id }))
+            button(t(key), "programs.local", "open_location")
+                .args(args.clone())
                 .primary(),
         );
     }
     if has_path(d) {
-        actions.push(button("Show in Explorer", "programs.local", "reveal").args(json!({ "id": id })));
-        actions.push(button("Copy path", "programs.local", "copy_path").args(json!({ "id": id })));
+        actions.push(
+            button(t("menu.reveal"), "programs.local", "reveal").args(args.clone()),
+        );
+        actions.push(button(t("menu.copy_path"), "programs.local", "copy_path").args(args));
     }
     if !actions.is_empty() {
         widgets.push(separator());
@@ -177,9 +204,7 @@ pub(crate) fn about_view(d: &Value, id: &str) -> Value {
 /// What a row action opens when the entry it names is no longer in the scan —
 /// the results are re-enumerated on every scan, and ids are positions in that
 /// list, so an id from an older scan can point at nothing.
-pub(crate) fn stale_view() -> Value {
-    window(
-        "Program",
-        vec![label("This entry isn't in the latest scan — re-scan and try again.").weak()],
-    )
+pub(crate) fn stale_view(lang: &str) -> Value {
+    let t = |k: &str| catalog().tr(lang, k);
+    window(t("about.title"), vec![label(t("about.stale")).weak()])
 }

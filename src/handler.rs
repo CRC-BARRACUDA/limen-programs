@@ -35,29 +35,32 @@ impl Handler for Programs {
         // Optional integration: only offer "Make Report" when a report provider
         // is actually loaded (discovered at call time, never a hard dependency).
         let report = host.has_capability("report.build");
+        // One lookup per call, then every view renders in that language.
+        let lang = host.locale();
+        let lang = lang.as_str();
         match method {
             // Landing view: the saved results if the user has scanned this
             // session, otherwise just a Scan button (no enumeration on open).
             "ui" => Ok(if self.scanned {
                 let entries = self.last_entries.clone();
                 let query = self.last_query.clone();
-                self.render(&entries, &query, self.last_page, report)
+                self.render(lang, &entries, &query, self.last_page, report)
             } else {
-                idle_view()
+                idle_view(lang)
             }),
             // Scan now (enumerate), save the state, and render (also Refresh).
-            "scan" => Ok(self.scan(&params, report)),
+            "scan" => Ok(self.scan(lang, &params, report)),
             // Turn to a page (from a pager button) without re-enumerating.
-            "page" => Ok(self.page(&params, report)),
+            "page" => Ok(self.page(lang, &params, report)),
             "list" => Ok(list_programs()),
             // Row actions: open an entry's details, or open where it's installed.
-            "about" => Ok(self.about(&params)),
+            "about" => Ok(self.about(lang, &params)),
             "open_location" => Ok(self.open_location(&params, host)),
             "reveal" => Ok(self.reveal(&params, host)),
             "copy_path" => Ok(self.copy_path(&params, host)),
             // Report integration (present only while a report provider is loaded).
-            "report_config" => Ok(report_config()),
-            "make_report" => Ok(self.make_report(&params, host)),
+            "report_config" => Ok(report_config(lang)),
+            "make_report" => Ok(self.make_report(lang, &params, host)),
             other => Err(RpcError::new(
                 rpc::METHOD_NOT_FOUND,
                 format!("programs has no method {other}"),
@@ -69,7 +72,7 @@ impl Handler for Programs {
 impl Programs {
     /// Enumerate the machine, save the scan state (so reopening the tab restores
     /// it), and render. `params.query` filters; Refresh calls this again.
-    fn scan(&mut self, params: &Value, report: bool) -> Value {
+    fn scan(&mut self, lang: &str, params: &Value, report: bool) -> Value {
         let query = params
             .get("query")
             .and_then(Value::as_str)
@@ -85,13 +88,13 @@ impl Programs {
         self.last_entries = entries.clone();
         self.last_query = query.clone();
         // A fresh scan / search resets to the first page.
-        self.render(&entries, &query, 0, report)
+        self.render(lang, &entries, &query, 0, report)
     }
 
     /// Turn to another page of the current (already-scanned) results. Re-slices
     /// `last_entries` — no re-enumeration — honoring the live search box so paging
     /// stays within the filtered set. `params`: `{ query, page }`.
-    fn page(&mut self, params: &Value, report: bool) -> Value {
+    fn page(&mut self, lang: &str, params: &Value, report: bool) -> Value {
         let query = params
             .get("query")
             .and_then(Value::as_str)
@@ -100,7 +103,7 @@ impl Programs {
         let page = params.get("page").and_then(Value::as_u64).unwrap_or(0) as usize;
         let entries = self.last_entries.clone();
         self.last_query = query.clone();
-        self.render(&entries, &query, page, report)
+        self.render(lang, &entries, &query, page, report)
     }
 
     /// The results view: filter `entries` by `query_raw`, slice out the current
@@ -108,6 +111,7 @@ impl Programs {
     /// (`about` / `open_location`) resolve it.
     pub(crate) fn render(
         &mut self,
+        lang: &str,
         entries: &[Value],
         query_raw: &str,
         page: usize,
@@ -136,18 +140,27 @@ impl Programs {
             self.last.insert(rid.clone(), (*d).clone());
             ids.push(rid);
             rows.push(row_cells(d));
-            menus.push(row_menu_for(d)); // per-row: open action only when openable
+            menus.push(row_menu_for(lang, d)); // per-row: open action only when openable
         }
 
-        results_view(query_raw, rows, ids, menus, (start, end, total), (page, page_count), report)
+        results_view(
+            lang,
+            query_raw,
+            rows,
+            ids,
+            menus,
+            (start, end, total),
+            (page, page_count),
+            report,
+        )
     }
 
     /// A detail view for one entry (opened in a new tab from a row action).
-    fn about(&self, params: &Value) -> Value {
+    fn about(&self, lang: &str, params: &Value) -> Value {
         let id = params.get("id").and_then(Value::as_str).unwrap_or("");
         match self.last.get(id) {
-            Some(d) => about_view(d, id),
-            None => stale_view(),
+            Some(d) => about_view(lang, d, id),
+            None => stale_view(lang),
         }
     }
 
@@ -188,20 +201,17 @@ impl Programs {
     }
 
     /// Build a report spec from the last scan and hand it to a report provider.
-    fn make_report(&self, params: &Value, host: &Host) -> Value {
-        let fmt = match params.get("format").and_then(Value::as_str).unwrap_or("") {
-            "Markdown" => "markdown",
-            "HTML" => "html",
-            "CSV" => "csv",
-            _ => "view",
-        };
-        let content = params.get("content").and_then(Value::as_str).unwrap_or("");
-        let scope = params.get("scope").and_then(Value::as_str).unwrap_or("");
-        let spec = report_spec(&self.last_entries, fmt, content, scope);
+    fn make_report(&self, lang: &str, params: &Value, host: &Host) -> Value {
+        let sent = |k: &str| params.get(k).and_then(Value::as_str).unwrap_or("");
+        let fmt = choice(lang, &FORMATS, sent("format"));
+        let content = choice(lang, &CONTENT, sent("content"));
+        let scope = choice(lang, &SCOPES, sent("scope"));
+        let spec = report_spec(lang, &self.last_entries, fmt, content, scope);
         match host.call("report.build", "build", spec) {
+            // The provider answered with a view of its own — it is the report.
             Ok(v) if v.get("widgets").is_some() => v,
-            Ok(_) => exported_view(),
-            Err(e) => report_failed_view(format!("{e}")),
+            Ok(_) => exported_view(lang),
+            Err(e) => report_failed_view(lang, format!("{e}")),
         }
     }
 }
