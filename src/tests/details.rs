@@ -86,3 +86,31 @@ fn double_click_opens_it_where_the_table_is() {
     );
     assert_eq!(activate.get("open_in_tab").and_then(Value::as_bool), Some(false));
 }
+
+/// The details name the entry once, not twice.
+///
+/// The host draws a view's title itself — in a pop-up's title bar, and as the
+/// name of a tab — so a heading of our own repeating it put the same string on
+/// screen twice, one line under the other. Program names are the long kind
+/// ("Microsoft Visual C++ 2015-2022 Redistributable (x64) - 14.44.35211"), which
+/// is precisely when a doubled line is most obvious and least useful.
+#[test]
+fn the_details_do_not_repeat_their_own_title() {
+    for (which, where_) in [("pop-up", Screen::Modal), ("tab", Screen::Tab)] {
+        let v = scanned().about("en", &json!({ "id": "0" }), where_);
+        let title = v
+            .get("title")
+            .and_then(Value::as_str)
+            .expect("the view names itself")
+            .to_string();
+        assert!(!title.is_empty(), "no title to compare against: {v}");
+
+        // The name still appears — as the value of the Name field — but never as
+        // a heading that simply restates the title.
+        let headings = widget_texts(&v).into_iter().filter(|t| *t == title).count();
+        assert_eq!(
+            headings, 1,
+            "{which}: the title is repeated {headings} times inside the view: {v}"
+        );
+    }
+}

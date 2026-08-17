@@ -218,9 +218,11 @@ pub(crate) fn about_view(lang: &str, d: &Value, id: &str, where_: Screen) -> Val
     let title = cell(d, "name");
     let args = json!({ "id": id, "from": where_.tag() });
 
+    // No heading of our own: the name is the view's title, and the host draws
+    // that — in the pop-up's own title bar, or as the tab's name. Repeating it
+    // here put the same long string on screen twice, one line under the other,
+    // and a third time as the Name field below.
     let mut widgets = vec![
-        label(title.clone()).strong(),
-        separator(),
         field(t("table.name"), cell(d, "name")),
         field(t("table.version"), cell(d, "version")),
         field(t("table.publisher"), cell(d, "publisher")),
