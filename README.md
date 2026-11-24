@@ -33,8 +33,10 @@ Every entry is reported in one schema: `source`, `name`, `version`,
 Open the **Programs** view and press **Scan** — it does not enumerate on open.
 The results table is interactive: right-click a row for **About** or **Open
 location**, or double-click for its details. If a `report.build` provider is
-loaded, a **Make Report** action appears (charts + tables, exportable to
-Markdown / HTML / CSV).
+loaded, a **Make Report** action appears: choose what goes in (charts, tables,
+which programs) and the report module's preview opens — where the PDF, its
+ground and whether to sign it with your OpenPGP key are chosen. The file is
+offered under this machine's name.
 
 Other modules can call `programs.local` → `list` for the raw inventory.
 
