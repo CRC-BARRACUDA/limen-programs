@@ -54,7 +54,6 @@ unknown = "—"
 [report]
 title = "Створити звіт"
 options = "Параметри звіту"
-output = "Формат"
 include = "Включити"
 show = "Показати"
 generate = "Створити"
@@ -65,12 +64,6 @@ failed = "Не вдалося створити звіт"
 
 # Варіанти у формі звіту. Форма повертає той напис, який показала, тому їх
 # зіставляють із цим самим списком — див. `choice` у report.rs.
-[report.format]
-view = "У застосунку"
-markdown = "Markdown"
-html = "HTML"
-csv = "CSV"
-
 [report.content]
 all = "Таблиці та діаграми"
 tables = "Лише таблиці"
@@ -85,6 +78,7 @@ user = "Лише користувацькі"
 [report.doc]
 title = "Звіт про встановлені програми"
 subtitle = "{total} програм · {system} системних · {user} користувацьких"
+subtitle_host = "{host} · {total} програм · {system} системних · {user} користувацьких"
 total = "Усього програм: {total}"
 system = "Системних: {system}"
 user = "Користувацьких: {user}"

@@ -7,13 +7,38 @@
 
 use crate::*;
 
-/// The output formats, as `(catalog key, what the report provider is told)`.
-pub(crate) const FORMATS: [(&str, &str); 4] = [
-    ("report.format.view", "view"),
-    ("report.format.markdown", "markdown"),
-    ("report.format.html", "html"),
-    ("report.format.csv", "csv"),
-];
+/// What the report provider is asked for: always its preview. What the
+/// document is — a PDF — the ground it is printed on, and whether it is signed
+/// are decided there, beside the thing being saved, by the module that owns
+/// the question, rather than in a dropdown here that has to be kept in step
+/// with what a provider can actually produce.
+pub(crate) const FORMAT: &str = "view";
+
+/// This machine's name, for the report's subtitle and its filename.
+///
+/// Read from the kernel on Linux and from the environment on Windows — no new
+/// permission, and no process spawned for a string the system already has.
+/// Empty rather than a guess if neither answers: a report labelled "unknown" is
+/// one somebody has to open to identify.
+fn hostname() -> String {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(name) = std::fs::read_to_string("/proc/sys/kernel/hostname") {
+            let name = name.trim();
+            if !name.is_empty() {
+                return name.to_string();
+            }
+        }
+    }
+    for var in ["COMPUTERNAME", "HOSTNAME"] {
+        if let Ok(name) = std::env::var(var) {
+            if !name.trim().is_empty() {
+                return name.trim().to_string();
+            }
+        }
+    }
+    String::new()
+}
 
 /// What the document carries.
 pub(crate) const CONTENT: [(&str, Content); 3] = [
@@ -66,12 +91,11 @@ pub(crate) fn report_config(lang: &str) -> Value {
         t("report.title"),
         vec![
             label(t("report.options")).strong(),
-            select("format", options(lang, &FORMATS)).label(t("report.output")),
             select("content", options(lang, &CONTENT)).label(t("report.include")),
             select("scope", options(lang, &SCOPES)).label(t("report.show")),
-            button(t("report.generate"), "programs.local", "make_report")
-                .primary()
-                .open_in_tab(),
+            // Not `open_in_tab`: the report provider answers with a pop-up,
+            // and one opened into a tab of its own leaves that tab empty.
+            button(t("report.generate"), "programs.local", "make_report").primary(),
         ],
     )
 }
@@ -99,12 +123,17 @@ pub(crate) fn report_failed_view(lang: &str, why: String) -> Value {
 
 /// Assemble the report spec (a by-source chart + a programs table) from the
 /// last scan, honoring the config choices.
-pub(crate) fn report_spec(
+pub(crate) fn report_spec(lang: &str, entries: &[Value], content: Content, scope: Scope) -> Value {
+    report_spec_for(lang, entries, content, scope, &hostname())
+}
+
+/// [`report_spec`] for the machine named `host` ("" when it has no name to give).
+pub(crate) fn report_spec_for(
     lang: &str,
     entries: &[Value],
-    fmt: &str,
     content: Content,
     scope: Scope,
+    host: &str,
 ) -> Value {
     let t = |k: &str| catalog().tr(lang, k);
     let in_scope = |d: &Value| match scope {
@@ -143,16 +172,18 @@ pub(crate) fn report_spec(
         }));
     }
 
-    let subtitle = n(
-        n(n(t("report.doc.subtitle"), "{total}", total), "{system}", system),
-        "{user}",
-        user,
-    );
+    // The machine this is about, in the line under the title and in the name
+    // the file is offered under. The report module adds the date; a folder of
+    // files all called "programs" is one nobody can find anything in.
+    let subtitle = t(if host.is_empty() { "report.doc.subtitle" } else { "report.doc.subtitle_host" });
+    let subtitle = n(n(n(subtitle, "{total}", total), "{system}", system), "{user}", user).replace("{host}", host);
+    let file_name = if host.is_empty() { "programs".to_string() } else { format!("{host}_programs") };
 
     json!({
         "title": t("report.doc.title"),
         "subtitle": subtitle,
-        "format": fmt,
+        "file_name": file_name,
+        "format": FORMAT,
         "summary": [
             n(t("report.doc.total"), "{total}", total),
             n(t("report.doc.system"), "{system}", system),

@@ -54,7 +54,6 @@ unknown = "—"
 [report]
 title = "Make Report"
 options = "Report options"
-output = "Output"
 include = "Include"
 show = "Show"
 generate = "Generate"
@@ -65,12 +64,6 @@ failed = "Couldn't build the report"
 
 # The choices in the report form. The form sends the label it showed, so these
 # are matched back against this same list — see `choice` in report.rs.
-[report.format]
-view = "In-app view"
-markdown = "Markdown"
-html = "HTML"
-csv = "CSV"
-
 [report.content]
 all = "Tables and charts"
 tables = "Tables only"
@@ -85,6 +78,7 @@ user = "User only"
 [report.doc]
 title = "Installed Programs Report"
 subtitle = "{total} programs · {system} system · {user} user"
+subtitle_host = "{host} · {total} programs · {system} system · {user} user"
 total = "Total programs: {total}"
 system = "System-wide: {system}"
 user = "User: {user}"

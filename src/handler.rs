@@ -277,10 +277,9 @@ impl Programs {
     /// Build a report spec from the last scan and hand it to a report provider.
     fn make_report(&self, lang: &str, params: &Value, host: &Host) -> Value {
         let sent = |k: &str| params.get(k).and_then(Value::as_str).unwrap_or("");
-        let fmt = choice(lang, &FORMATS, sent("format"));
         let content = choice(lang, &CONTENT, sent("content"));
         let scope = choice(lang, &SCOPES, sent("scope"));
-        let spec = report_spec(lang, &self.last_entries, fmt, content, scope);
+        let spec = report_spec(lang, &self.last_entries, content, scope);
         match host.call("report.build", "build", spec) {
             // The provider answered with a view of its own — it is the report.
             Ok(v) if v.get("widgets").is_some() => v,
