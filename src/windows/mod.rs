@@ -47,6 +47,18 @@ pub(crate) fn field(d: &Value, key: &str) -> String {
     d.get(key).and_then(Value::as_str).unwrap_or("").to_string()
 }
 
+/// An `InstallLocation` as a path somebody can open or paste.
+///
+/// Installers write the value themselves and some write it the way they would
+/// on a command line, in quotes — the Visual Studio Installer does — which is
+/// not a path any more: Explorer will not open it, and pasted it carries the
+/// quotes along.
+pub(crate) fn location(raw: &str) -> String {
+    let raw = raw.trim();
+    let inside = raw.strip_prefix('"').map(|rest| rest.strip_suffix('"').unwrap_or(rest));
+    inside.unwrap_or(raw).trim().to_string()
+}
+
 /// Windows records `InstallLocation` directly, so there is no lazy package
 /// resolution — reveal/copy use that location when present.
 pub(crate) fn package_path(_source: &str, _name: &str) -> Option<String> {

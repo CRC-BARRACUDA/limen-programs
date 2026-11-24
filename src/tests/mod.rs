@@ -6,12 +6,16 @@
 use crate::*;
 
 mod alerts;
+#[cfg(target_os = "windows")]
+mod clipboard;
 mod details;
 mod i18n;
 mod pagination;
 
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "windows")]
+mod windows;
 
 /// `n` entries, named so their order is their index — enough for the view to
 /// have something to slice, page and filter.

@@ -43,7 +43,7 @@ pub(super) fn collect(out: &mut Vec<Value>, hive: HKEY, path: &str, scope: &str)
             display,
             sval(&sub, "DisplayVersion"),
             sval(&sub, "Publisher"),
-            sval(&sub, "InstallLocation"),
+            super::location(&sval(&sub, "InstallLocation")),
             scope,
         ));
     }
