@@ -1,7 +1,7 @@
 [module]
 name = "programs"
 display_name = "List of installed programs"
-version = "0.1.0"
+version = "0.2.0"
 language = "native"
 entry = "programs"
 abi = "native"
